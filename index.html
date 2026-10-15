@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista do Futebol</title>
+    <meta name="theme-color" content="#16a34a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Lista do Futebol">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <style>
+        :root {
+            --primary: #22c55e;
+            --primary-dark: #16a34a;
+            --danger: #ef4444;
+            --danger-dark: #dc2626;
+            --warning: #f59e0b;
+            --background: #f8fafc;
+            --card: #ffffff;
+            --text: #0f172a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--background); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 450px; background: var(--card); padding: 24px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        h1 { font-size: 24px; text-align: center; margin-bottom: 8px; }
+        .subtitle { text-align: center; color: #64748b; font-size: 14px; margin-bottom: 24px; }
+        .vagas-contador { text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 20px; color: var(--primary-dark); }
+
+        .admin-area { display: none; margin-bottom: 16px; }
+        .admin-banner { background: #fee2e2; color: #991b1b; text-align: center; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 13px; margin-bottom: 8px; border: 1px solid #fca5a5; }
+        .admin-area button { width: 100%; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
+        #btnToggleLista { background: var(--warning); }
+        #btnClearAll { background: var(--danger-dark); }
+
+        .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+        input { width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; outline: none; }
+        input:focus-visible { border-color: var(--primary); }
+        button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+        .botoes-container { display: flex; gap: 8px; }
+        .botoes-container button { flex: 1; color: white; border: none; padding: 12px 10px; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .btn-confirmar { background: var(--primary); }
+        .btn-confirmar:hover { background: var(--primary-dark); }
+        .btn-fora { background: var(--danger); }
+        .btn-fora:hover { background: var(--danger-dark); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .aviso-fechado { background: #fee2e2; color: #991b1b; text-align: center; padding: 16px; border-radius: 8px; font-weight: bold; margin-bottom: 24px; border: 1px solid #fca5a5; font-size: 14px; }
+
+        h2 { font-size: 16px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin: 20px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+        ul { list-style: none; }
+        li { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f1f5f9; margin-bottom: 6px; border-radius: 6px; font-size: 15px; gap: 8px; }
+        li span { overflow-wrap: anywhere; }
+        .list-falta li { background: #fee2e2; color: #991b1b; }
+        .btn-remover { background: none; color: #64748b; padding: 4px 8px; font-size: 13px; border: none; cursor: pointer; border-radius: 4px; flex-shrink: 0; }
+        .btn-remover:hover { background: #e2e8f0; color: var(--text); }
+        .empty { color: #94a3b8; font-style: italic; text-align: center; padding: 12px; font-size: 14px; }
+
+        #btnSortear { background: #7c3aed; }
+        #btnApagarTimes { background: #475569; display: none; }
+
+        .times-info { color: #64748b; font-size: 13px; text-align: center; margin-bottom: 10px; }
+        .times-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .time-card { border-radius: 10px; overflow: hidden; background: #f1f5f9; }
+        .time-card h3 { color: white; font-size: 14px; padding: 8px 10px; }
+        .time-card ul { padding: 6px 8px 2px; }
+        .time-card li { background: white; margin-bottom: 4px; padding: 6px 8px; font-size: 14px; }
+        @media (max-width: 340px) { .times-grid { grid-template-columns: 1fr; } }
+
+        .rodape { text-align: center; margin-top: 24px; }
+        .btn-instalar { background: var(--primary); color: white; border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: bold; cursor: pointer; margin-bottom: 12px; }
+        .btn-instalar:hover { background: var(--primary-dark); }
+        .dica-instalar { color: #64748b; font-size: 13px; margin-bottom: 12px; }
+        [hidden] { display: none !important; }
+        .link-admin { background: none; border: none; color: #94a3b8; font-size: 12px; cursor: pointer; text-decoration: underline; }
+
+        dialog { margin: auto; border: none; border-radius: 12px; padding: 20px; width: min(90vw, 340px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        dialog::backdrop { background: rgba(15, 23, 42, 0.5); }
+        dialog h3 { margin-bottom: 12px; font-size: 18px; }
+        dialog input { margin-bottom: 8px; }
+        .dialog-erro { color: var(--danger-dark); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
+        .dialog-botoes { display: flex; gap: 8px; }
+        .dialog-botoes button { flex: 1; padding: 10px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
+        #btnEntrar { background: var(--primary); color: white; }
+        #btnCancelar { background: #e2e8f0; color: var(--text); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="adminArea" class="admin-area">
+        <div class="admin-banner">🛠️ MODO ADMINISTRADOR ATIVADO</div>
+        <button id="btnToggleLista" type="button">🔒 Trancar Lista</button>
+        <button id="btnSortear" type="button">🎲 Sortear times agora</button>
+        <button id="btnApagarTimes" type="button">🗑️ Apagar times sorteados</button>
+        <button id="btnClearAll" type="button">🧹 Limpar e Zerar Lista</button>
+    </div>
+
+    <h1>⚽ Lista do Futebol</h1>
+    <div class="subtitle">Digite seu nome e escolha sua situação</div>
+
+    <div class="vagas-contador" id="contador">0 / 20 Vagas Ocupadas</div>
+
+    <div id="avisoFechado" class="aviso-fechado" hidden>🔒 A lista está fechada no momento. Ela abre automaticamente toda terça-feira, às 12h.</div>
+
+    <div class="form-group" id="formGroup">
+        <input type="text" id="nomeJogador" placeholder="Seu nome ou apelido" maxlength="25" autocomplete="off">
+        <div class="botoes-container">
+            <button class="btn-confirmar" id="btnConfirmar" type="button">⚽ Confirmar</button>
+            <button class="btn-fora" id="btnFora" type="button">❌ Tô Fora</button>
+        </div>
+    </div>
+
+    <h2>📋 Lista Principal (Máx 20)</h2>
+    <ul id="listaPrincipal"></ul>
+
+    <h2>⏳ Lista de Espera</h2>
+    <ul id="listaEspera"></ul>
+
+    <h2>🚫 Faltas Confirmadas</h2>
+    <ul id="listaFalta" class="list-falta"></ul>
+
+    <h2>🎲 Times do Dia</h2>
+    <div id="blocoTimes"></div>
+
+    <div class="rodape">
+        <button class="btn-instalar" id="btnInstalar" type="button" hidden>📲 Instalar o app</button>
+        <p class="dica-instalar" id="dicaIos" hidden>No iPhone: toque em Compartilhar e depois em "Adicionar à Tela de Início".</p>
+        <button class="link-admin" id="btnAdminLink" type="button">Área do administrador</button>
+    </div>
+</div>
+
+<dialog id="dlgLogin">
+    <h3>Entrar como administrador</h3>
+    <input type="email" id="loginEmail" placeholder="E-mail" autocomplete="username">
+    <input type="password" id="loginSenha" placeholder="Senha" autocomplete="current-password">
+    <div class="dialog-erro" id="loginErro"></div>
+    <div class="dialog-botoes">
+        <button id="btnCancelar" type="button">Cancelar</button>
+        <button id="btnEntrar" type="button">Entrar</button>
+    </div>
+</dialog>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getDatabase, ref, set, update, remove, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+    import { getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyB7cSqVEFuDbCgpDkbq2ai2ZfJXUdEZtxs",
+        authDomain: "lista-da-pelada.firebaseapp.com",
+        databaseURL: "https://lista-da-pelada-default-rtdb.firebaseio.com",
+        projectId: "lista-da-pelada",
+        storageBucket: "lista-da-pelada.firebasestorage.app",
+        messagingSenderId: "217454887289",
+        appId: "1:217454887289:web:369896393b936669822fa8"
+    };
+
+    const MAX_VAGAS = 20;
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+
+    let user = null;          // usuário atual (anônimo ou admin)
+    let jogadores = [];       // [{ id, nome, status, criadoEm, dono }]
+    let aberta = true;
+    let carregou = false;
+    let times = null;         // sorteio atual: { rodada, equipes: { rosa: [...], ... } }
+    let historico = {};       // sorteios anteriores, usados para evitar repetir os mesmos times
+    let offsetRelogio = 0;    // diferença entre o relógio do celular e o do servidor
+    let aberturaAuto = null;  // dia (AAAA-MM-DD) em que a abertura automática já aconteceu
+
+    const $ = (id) => document.getElementById(id);
+    const isAdmin = () => !!user && !user.isAnonymous;
+
+    // ---------- Autenticação ----------
+    onAuthStateChanged(auth, (u) => {
+        if (!u) {
+            signInAnonymously(auth).catch((err) => alert("Não foi possível conectar: " + err.message));
+            return;
+        }
+        user = u;
+        atualizarTela();
+    });
+
+    $('btnAdminLink').onclick = () => {
+        if (isAdmin()) {
+            signOut(auth); // volta automaticamente para o login anônimo
+        } else {
+            $('loginErro').textContent = '';
+            $('dlgLogin').showModal();
+        }
+    };
+    $('btnCancelar').onclick = () => $('dlgLogin').close();
+    $('btnEntrar').onclick = async () => {
+        $('loginErro').textContent = '';
+        try {
+            await signInWithEmailAndPassword(auth, $('loginEmail').value.trim(), $('loginSenha').value);
+            $('loginSenha').value = '';
+            $('dlgLogin').close();
+        } catch (err) {
+            $('loginErro').textContent = 'E-mail ou senha incorretos.';
+        }
+    };
+
+    // ---------- Leitura em tempo real ----------
+    onValue(ref(db, 'pelada'), (snapshot) => {
+        const d = snapshot.val() || {};
+        aberta = d.aberta !== false; // padrão: aberta
+        jogadores = Object.entries(d.jogadores || {})
+            .map(([id, j]) => ({ id, ...j }))
+            .sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0) || a.id.localeCompare(b.id));
+        times = d.times || null;
+        historico = d.historico || {};
+        aberturaAuto = d.aberturaAuto || null;
+        carregou = true;
+        atualizarTela();
+        verificarAberturaAutomatica();
+        verificarSorteioAutomatico();
+    }, (err) => alert("Erro ao ler a lista: " + err.message));
+
+    // Usa o relógio do servidor, para um celular com hora errada não disparar o sorteio fora de hora
+    onValue(ref(db, '.info/serverTimeOffset'), (s) => { offsetRelogio = s.val() || 0; });
+
+    // ---------- Tela ----------
+    function criarItem(texto, jogador) {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = texto; // textContent evita injeção de HTML pelos nomes
+        li.appendChild(span);
+        if (user && (isAdmin() || jogador.dono === user.uid)) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-remover';
+            btn.textContent = 'Apagar';
+            btn.onclick = () => removerJogador(jogador);
+            li.appendChild(btn);
+        }
+        return li;
+    }
+
+    function preencher(ul, itens, textoVazio) {
+        ul.replaceChildren();
+        if (itens.length === 0) {
+            const div = document.createElement('div');
+            div.className = 'empty';
+            div.textContent = textoVazio;
+            ul.appendChild(div);
+        } else {
+            itens.forEach((li) => ul.appendChild(li));
+        }
+    }
+
+    function atualizarTela() {
+        const confirmados = jogadores.filter((j) => j.status === 'confirmado');
+        const faltas = jogadores.filter((j) => j.status === 'falta');
+        const principal = confirmados.slice(0, MAX_VAGAS);
+        const espera = confirmados.slice(MAX_VAGAS);
+
+        $('contador').textContent = `${principal.length} / ${MAX_VAGAS} Vagas Ocupadas`;
+
+        preencher($('listaPrincipal'), principal.map((j, i) => criarItem(`${i + 1}. ${j.nome}`, j)), 'Nenhum jogador confirmado.');
+        preencher($('listaEspera'), espera.map((j) => criarItem(`⏳ ${j.nome}`, j)), 'Ninguém na fila de espera.');
+        preencher($('listaFalta'), faltas.map((j) => criarItem(`❌ ${j.nome}`, j)), 'Nenhuma falta registrada.');
+
+        // Formulário x aviso de lista trancada
+        const bloqueado = !aberta && !isAdmin();
+        $('formGroup').style.display = bloqueado ? 'none' : 'flex';
+        $('avisoFechado').hidden = !bloqueado;
+        $('btnConfirmar').disabled = $('btnFora').disabled = !user || !carregou;
+
+        // Área do admin
+        $('adminArea').style.display = isAdmin() ? 'block' : 'none';
+        $('btnAdminLink').textContent = isAdmin() ? 'Sair do modo administrador' : 'Área do administrador';
+        if (isAdmin()) {
+            $('btnToggleLista').textContent = aberta ? '🔒 Trancar Lista (Bloquear Nomes)' : '🔓 Abrir Lista (Liberar para a Galera)';
+            $('btnToggleLista').style.background = aberta ? 'var(--warning)' : 'var(--primary)';
+        }
+        renderizarTimes();
+    }
+
+    // ---------- Ações ----------
+    // A chave do registro é o nome "normalizado": assim o Firebase impede nomes repetidos
+    // e cada pessoa só mexe no próprio registro (nunca reescreve a lista inteira).
+    function chaveDoNome(nome) {
+        return nome
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+    }
+
+    function adicionarJogador(status) {
+        if (!user || !carregou) return;
+        const input = $('nomeJogador');
+        const nome = input.value.trim().replace(/\s+/g, ' ');
+        const chave = chaveDoNome(nome);
+
+        if (nome === '' || chave === '') {
+            alert('Digite um nome com pelo menos uma letra ou número.');
+            return;
+        }
+        if (jogadores.some((j) => j.id === chave)) {
+            alert('Este nome já está na página. Apague o registro antigo antes de mudar.');
+            return;
+        }
+
+        set(ref(db, 'pelada/jogadores/' + chave), {
+            nome,
+            status,
+            criadoEm: serverTimestamp(),
+            dono: user.uid
+        }).then(() => {
+            input.value = '';
+        }).catch(() => {
+            alert('Não foi possível salvar. Esse nome já pode estar na lista, ou a lista foi trancada.');
+        });
+    }
+
+    function removerJogador(j) {
+        if (!confirm(`Deseja remover "${j.nome}" da lista?`)) return;
+        remove(ref(db, 'pelada/jogadores/' + j.id))
+            .catch((err) => alert('Erro ao remover: ' + err.message));
+    }
+
+    $('btnConfirmar').onclick = () => adicionarJogador('confirmado');
+    $('btnFora').onclick = () => adicionarJogador('falta');
+    $('nomeJogador').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') adicionarJogador('confirmado');
+    });
+
+    $('btnToggleLista').onclick = () => {
+        set(ref(db, 'pelada/aberta'), !aberta)
+            .catch((err) => alert('Erro ao alterar status: ' + err.message));
+    };
+
+    $('btnClearAll').onclick = () => {
+        if (!confirm('⚠️ ATENÇÃO: Deseja apagar TODOS os nomes? A lista também será trancada automaticamente.')) return;
+        update(ref(db), { 'pelada/jogadores': null, 'pelada/aberta': false, 'pelada/times': null })
+            .catch((err) => alert('Erro ao limpar: ' + err.message));
+    };
+
+    // ---------- Times ----------
+    const EQUIPES = [
+        { id: 'rosa',     nome: 'Time Rosa',     cor: '#db2777' },
+        { id: 'verde',    nome: 'Time Verde',    cor: '#15803d' },
+        { id: 'azul',     nome: 'Time Azul',     cor: '#2563eb' },
+        { id: 'vermelho', nome: 'Time Vermelho', cor: '#dc2626' }
+    ];
+    const RODADAS_NA_MEMORIA = 8;     // quantos sorteios anteriores são considerados
+    const PESO_DECAIMENTO = 0.7;      // o sorteio mais recente pesa mais que os antigos
+    const HORA_SORTEIO = 20 * 60 + 10; // 20h10, em minutos
+
+    const agora = () => new Date(Date.now() + offsetRelogio);
+
+    // Data, dia da semana e hora no fuso de São Paulo
+    function partesSP(data) {
+        const partes = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Sao_Paulo', weekday: 'short',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+        }).formatToParts(data);
+        const o = {};
+        partes.forEach((p) => { o[p.type] = p.value; });
+        return {
+            dia: `${o.year}-${o.month}-${o.day}`,
+            semana: o.weekday,
+            minutos: parseInt(o.hour, 10) * 60 + parseInt(o.minute, 10)
+        };
+    }
+
+    function embaralhar(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    function listaPrincipal() {
+        return jogadores.filter((j) => j.status === 'confirmado').slice(0, MAX_VAGAS);
+    }
+
+    // Quanto cada dupla já jogou junta nos sorteios recentes (mais recente = peso maior)
+    function construirPesos(hist) {
+        const pesos = new Map();
+        Object.keys(hist).sort().reverse().slice(0, RODADAS_NA_MEMORIA).forEach((rodada, idade) => {
+            const peso = Math.pow(PESO_DECAIMENTO, idade);
+            Object.values((hist[rodada] && hist[rodada].equipes) || {}).forEach((lista) => {
+                const chaves = Object.values(lista || {}).map(chaveDoNome);
+                for (let i = 0; i < chaves.length; i++) {
+                    for (let j = i + 1; j < chaves.length; j++) {
+                        const k = chaves[i] < chaves[j] ? chaves[i] + '|' + chaves[j] : chaves[j] + '|' + chaves[i];
+                        pesos.set(k, (pesos.get(k) || 0) + peso);
+                    }
+                }
+            });
+        });
+        return pesos;
+    }
+
+    // Sorteia várias divisões aleatórias, melhora cada uma trocando jogadores de time
+    // e escolhe, ao acaso, entre as que repetem menos duplas.
+    function sortearEquipes(nomes, pesos) {
+        const n = nomes.length;
+        const chaves = nomes.map(chaveDoNome);
+        const W = chaves.map((a) => chaves.map((b) => a === b ? 0 : (pesos.get(a < b ? a + '|' + b : b + '|' + a) || 0)));
+
+        // Tamanhos o mais parecidos possível (ex.: 18 jogadores = 5, 5, 4, 4)
+        const base = Math.floor(n / EQUIPES.length);
+        const extra = n % EQUIPES.length;
+        const tamanhos = new Array(EQUIPES.length).fill(base);
+        embaralhar(EQUIPES.map((_, i) => i)).slice(0, extra).forEach((t) => { tamanhos[t]++; });
+
+        let melhorCusto = Infinity;
+        let melhores = [];
+        for (let r = 0; r < 300; r++) {
+            const time = new Array(n);
+            const ordem = embaralhar([...Array(n).keys()]);
+            let pos = 0;
+            tamanhos.forEach((tam, t) => { for (let s = 0; s < tam; s++) time[ordem[pos++]] = t; });
+
+            let melhorou = true;
+            while (melhorou) {
+                melhorou = false;
+                for (let i = 0; i < n; i++) {
+                    for (let j = i + 1; j < n; j++) {
+                        if (time[i] === time[j]) continue;
+                        let delta = 0;
+                        for (let x = 0; x < n; x++) {
+                            if (x === i || x === j) continue;
+                            if (time[x] === time[i]) delta += W[j][x] - W[i][x];
+                            else if (time[x] === time[j]) delta += W[i][x] - W[j][x];
+                        }
+                        if (delta < -1e-9) {
+                            [time[i], time[j]] = [time[j], time[i]];
+                            melhorou = true;
+                        }
+                    }
+                }
+            }
+
+            let custo = 0;
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 1; j < n; j++) {
+                    if (time[i] === time[j]) custo += W[i][j];
+                }
+            }
+            if (custo < melhorCusto - 1e-9) { melhorCusto = custo; melhores = [time]; }
+            else if (Math.abs(custo - melhorCusto) <= 1e-9) { melhores.push(time); }
+        }
+
+        const escolhido = melhores[Math.floor(Math.random() * melhores.length)];
+        const equipes = {};
+        EQUIPES.forEach((e) => { equipes[e.id] = []; });
+        escolhido.forEach((t, idx) => equipes[EQUIPES[t].id].push(nomes[idx]));
+        Object.values(equipes).forEach((l) => l.sort((a, b) => a.localeCompare(b, 'pt-BR')));
+        return equipes;
+    }
+
+    function sortearTimes(manual) {
+        if (!user || !carregou) return;
+        const nomes = listaPrincipal().map((j) => j.nome);
+        if (nomes.length < EQUIPES.length) {
+            if (manual) alert('É preciso ter pelo menos 4 jogadores na lista principal para sortear.');
+            return;
+        }
+        const rodada = partesSP(agora()).dia;
+        const hist = { ...historico };
+        delete hist[rodada]; // um novo sorteio no mesmo dia substitui o anterior
+        const registro = {
+            rodada,
+            criadoEm: serverTimestamp(),
+            equipes: sortearEquipes(nomes, construirPesos(hist))
+        };
+        update(ref(db), { 'pelada/times': registro, ['pelada/historico/' + rodada]: registro })
+            .catch((err) => { if (manual) alert('Erro ao sortear: ' + err.message); });
+    }
+
+    // Na terça, a partir das 20h10, o primeiro celular com o site aberto faz o sorteio.
+    // As regras do Firebase só aceitam o primeiro: se dois tentarem juntos, vale um só.
+    let ultimaTentativaAuto = null;
+    function verificarSorteioAutomatico() {
+        if (!user || !carregou || times) return;
+        const { dia, semana, minutos } = partesSP(agora());
+        if (semana !== 'Tue' || minutos < HORA_SORTEIO) return;
+        if (ultimaTentativaAuto === dia) return;
+        if (listaPrincipal().length < EQUIPES.length) return;
+        ultimaTentativaAuto = dia;
+        sortearTimes(false);
+    }
+    // Na terça, a partir das 12h, o primeiro celular com o site aberto abre a lista.
+    // O dia fica registrado: se o admin trancar depois, a lista NÃO reabre sozinha naquele dia.
+    const HORA_ABERTURA = 12 * 60; // 12h, em minutos
+    let ultimaTentativaAbertura = null;
+    function verificarAberturaAutomatica() {
+        if (!user || !carregou) return;
+        const { dia, semana, minutos } = partesSP(agora());
+        if (semana !== 'Tue' || minutos < HORA_ABERTURA) return;
+        if (aberturaAuto === dia || ultimaTentativaAbertura === dia) return;
+        ultimaTentativaAbertura = dia;
+        const mudancas = { 'pelada/aberturaAuto': dia };
+        if (!aberta) mudancas['pelada/aberta'] = true;
+        update(ref(db), mudancas).catch(() => { /* outro celular chegou primeiro */ });
+    }
+
+    setInterval(() => {
+        verificarAberturaAutomatica();
+        verificarSorteioAutomatico();
+    }, 15000);
+
+    function renderizarTimes() {
+        const bloco = $('blocoTimes');
+        bloco.replaceChildren();
+
+        if (!times) {
+            const vazio = document.createElement('div');
+            vazio.className = 'empty';
+            vazio.textContent = 'Os times saem na terça-feira, às 20h10.';
+            bloco.appendChild(vazio);
+        } else {
+            if (times.rodada) {
+                const [, mes, dia] = times.rodada.split('-');
+                const info = document.createElement('div');
+                info.className = 'times-info';
+                info.textContent = `Sorteio de ${dia}/${mes}`;
+                bloco.appendChild(info);
+            }
+            const grade = document.createElement('div');
+            grade.className = 'times-grid';
+            EQUIPES.forEach((e) => {
+                const nomes = Object.values((times.equipes || {})[e.id] || []);
+                const card = document.createElement('div');
+                card.className = 'time-card';
+                const titulo = document.createElement('h3');
+                titulo.style.background = e.cor;
+                titulo.textContent = `${e.nome} (${nomes.length})`;
+                const ul = document.createElement('ul');
+                nomes.forEach((nome) => {
+                    const li = document.createElement('li');
+                    const span = document.createElement('span');
+                    span.textContent = nome;
+                    li.appendChild(span);
+                    ul.appendChild(li);
+                });
+                card.append(titulo, ul);
+                grade.appendChild(card);
+            });
+            bloco.appendChild(grade);
+        }
+
+        $('btnSortear').textContent = times ? '🔁 Sortear times de novo' : '🎲 Sortear times agora';
+        $('btnApagarTimes').style.display = times ? 'block' : 'none';
+    }
+
+    $('btnSortear').onclick = () => {
+        if (times && !confirm('Já existem times sorteados. Deseja sortear de novo?')) return;
+        sortearTimes(true);
+    };
+
+    $('btnApagarTimes').onclick = () => {
+        if (!times) return;
+        if (!confirm('Apagar os times sorteados? O sorteio também sai do histórico usado para evitar repetições.')) return;
+        const mudancas = { 'pelada/times': null };
+        if (times.rodada) mudancas['pelada/historico/' + times.rodada] = null;
+        update(ref(db), mudancas).catch((err) => alert('Erro ao apagar: ' + err.message));
+    };
+</script>
+
+<script>
+    // PWA: registra o service worker e oferece a instalação
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+    }
+
+    const jaInstalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    let eventoInstalar = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        eventoInstalar = e;
+        if (!jaInstalado) document.getElementById('btnInstalar').hidden = false;
+    });
+
+    document.getElementById('btnInstalar').addEventListener('click', async () => {
+        if (!eventoInstalar) return;
+        eventoInstalar.prompt();
+        await eventoInstalar.userChoice;
+        eventoInstalar = null;
+        document.getElementById('btnInstalar').hidden = true;
+    });
+
+    window.addEventListener('appinstalled', () => {
+        document.getElementById('btnInstalar').hidden = true;
+    });
+
+    // iPhone/iPad não têm botão automático: mostramos a dica
+    const ehIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (ehIos && !jaInstalado) document.getElementById('dicaIos').hidden = false;
+</script>
+</body>
+</html>
