@@ -74,7 +74,7 @@
         .rodape { text-align: center; margin-top: 24px; }
         .btn-instalar { background: var(--primary); color: white; border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: bold; cursor: pointer; margin-bottom: 12px; }
         .btn-instalar:hover { background: var(--primary-dark); }
-        .btn-avisos { display: block; margin: 0 auto 12px; background: white; color: var(--primary-dark); border: 2px solid var(--primary); border-radius: 8px; padding: 9px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .btn-avisos { display: block; width: 100%; margin: 0 0 16px; background: #f0fdf4; color: var(--primary-dark); border: 2px solid var(--primary); border-radius: 10px; padding: 11px 16px; font-size: 15px; font-weight: bold; cursor: pointer; }
         .btn-avisos:hover { background: #f0fdf4; }
         .dica-instalar { color: #64748b; font-size: 13px; margin-bottom: 12px; }
         [hidden] { display: none !important; }
@@ -104,6 +104,7 @@
 
     <h1>⚽ Lista do Futebol</h1>
     <div class="subtitle">Digite seu nome e escolha sua situação</div>
+    <button class="btn-avisos" id="btnAvisos" type="button" hidden>🔔 Avisar quando abrir uma vaga para mim</button>
 
     <div class="vagas-contador" id="contador">0 / 20 Vagas Ocupadas</div>
 
@@ -130,9 +131,9 @@
     <div id="blocoTimes"></div>
 
     <div class="rodape">
-        <button class="btn-avisos" id="btnAvisos" type="button" hidden>🔔 Ativar avisos de vaga</button>
         <button class="btn-instalar" id="btnInstalar" type="button" hidden>📲 Instalar o app</button>
         <p class="dica-instalar" id="dicaIos" hidden>No iPhone: toque em Compartilhar e depois em "Adicionar à Tela de Início".</p>
+        <div><button class="link-admin" id="btnDesativarAvisos" type="button" hidden>Desativar avisos de vaga</button></div>
         <button class="link-admin" id="btnAdminLink" type="button">Área do administrador</button>
     </div>
 </div>
@@ -593,11 +594,11 @@
     }
 
     async function atualizarBotaoAvisos() {
-        const btn = $('btnAvisos');
-        if (!suportaAvisos) { btn.hidden = true; return; }
+        const ativar = $('btnAvisos'), desativar = $('btnDesativarAvisos');
+        if (!suportaAvisos) { ativar.hidden = true; desativar.hidden = true; return; }
         const sub = Notification.permission === 'granted' ? await inscricaoAtual() : null;
-        btn.hidden = false;
-        btn.textContent = sub ? '🔕 Desativar avisos de vaga' : '🔔 Ativar avisos de vaga';
+        ativar.hidden = !!sub;      // já ativou: o botão do topo some
+        desativar.hidden = !sub;    // e aparece só um link discreto no rodapé
     }
 
     // Se este aparelho já tem avisos ativos, garante que a inscrição está ligada ao usuário atual
@@ -614,36 +615,44 @@
         atualizarBotaoAvisos();
     }
 
-    async function alternarAvisos() {
+    async function ativarAvisos() {
         if (!user) return;
         const btn = $('btnAvisos');
         btn.disabled = true;
         try {
-            const sub = Notification.permission === 'granted' ? await inscricaoAtual() : null;
-            if (sub) {
-                await remove(ref(db, 'inscricoes/' + user.uid));
-                await sub.unsubscribe();
-            } else {
-                const permissao = await Notification.requestPermission();
-                if (permissao !== 'granted') {
-                    alert('Sem a permissão do navegador não dá para enviar avisos. Você pode liberar nas configurações do site ou do app.');
-                    return;
-                }
-                const reg = await navigator.serviceWorker.ready;
-                const nova = await reg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: chaveParaBytes(VAPID_PUBLIC_KEY)
-                });
-                await set(ref(db, 'inscricoes/' + user.uid), nova.toJSON());
+            const permissao = await Notification.requestPermission();
+            if (permissao !== 'granted') {
+                alert('Sem a permissão do navegador não dá para enviar avisos. Você pode liberar nas configurações do site ou do app.');
+                return;
             }
+            const reg = await navigator.serviceWorker.ready;
+            const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: chaveParaBytes(VAPID_PUBLIC_KEY)
+            });
+            await set(ref(db, 'inscricoes/' + user.uid), sub.toJSON());
         } catch (err) {
-            alert('Não foi possível alterar os avisos: ' + err.message);
+            alert('Não foi possível ativar os avisos: ' + err.message);
         } finally {
             btn.disabled = false;
             atualizarBotaoAvisos();
         }
     }
-    $('btnAvisos').onclick = alternarAvisos;
+
+    async function desativarAvisos() {
+        if (!user || !confirm('Parar de receber avisos de vaga neste aparelho?')) return;
+        try {
+            await remove(ref(db, 'inscricoes/' + user.uid));
+            const sub = await inscricaoAtual();
+            if (sub) await sub.unsubscribe();
+        } catch (err) {
+            alert('Não foi possível desativar os avisos: ' + err.message);
+        }
+        atualizarBotaoAvisos();
+    }
+
+    $('btnAvisos').onclick = ativarAvisos;
+    $('btnDesativarAvisos').onclick = desativarAvisos;
     atualizarBotaoAvisos();
 
     // Depois de entrar/sair da lista, pede ao servidor para ver se alguém subiu da espera
