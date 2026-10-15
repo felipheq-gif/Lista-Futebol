@@ -1,0 +1,10 @@
+{
+  "name": "lista-futebol",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lista do Futebol - site (PWA) e função de avisos",
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "web-push": "^3.6.7"
+  }
+}

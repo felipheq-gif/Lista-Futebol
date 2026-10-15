@@ -74,6 +74,8 @@
         .rodape { text-align: center; margin-top: 24px; }
         .btn-instalar { background: var(--primary); color: white; border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: bold; cursor: pointer; margin-bottom: 12px; }
         .btn-instalar:hover { background: var(--primary-dark); }
+        .btn-avisos { display: block; margin: 0 auto 12px; background: white; color: var(--primary-dark); border: 2px solid var(--primary); border-radius: 8px; padding: 9px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .btn-avisos:hover { background: #f0fdf4; }
         .dica-instalar { color: #64748b; font-size: 13px; margin-bottom: 12px; }
         [hidden] { display: none !important; }
         .link-admin { background: none; border: none; color: #94a3b8; font-size: 12px; cursor: pointer; text-decoration: underline; }
@@ -128,6 +130,7 @@
     <div id="blocoTimes"></div>
 
     <div class="rodape">
+        <button class="btn-avisos" id="btnAvisos" type="button" hidden>🔔 Ativar avisos de vaga</button>
         <button class="btn-instalar" id="btnInstalar" type="button" hidden>📲 Instalar o app</button>
         <p class="dica-instalar" id="dicaIos" hidden>No iPhone: toque em Compartilhar e depois em "Adicionar à Tela de Início".</p>
         <button class="link-admin" id="btnAdminLink" type="button">Área do administrador</button>
@@ -186,6 +189,7 @@
         }
         user = u;
         atualizarTela();
+        sincronizarAvisos();
     });
 
     $('btnAdminLink').onclick = () => {
@@ -317,6 +321,7 @@
             dono: user.uid
         }).then(() => {
             input.value = '';
+            avisarServidor();
         }).catch(() => {
             alert('Não foi possível salvar. Esse nome já pode estar na lista, ou a lista foi trancada.');
         });
@@ -325,6 +330,7 @@
     function removerJogador(j) {
         if (!confirm(`Deseja remover "${j.nome}" da lista?`)) return;
         remove(ref(db, 'pelada/jogadores/' + j.id))
+            .then(avisarServidor)
             .catch((err) => alert('Erro ao remover: ' + err.message));
     }
 
@@ -570,6 +576,85 @@
         if (times.rodada) mudancas['pelada/historico/' + times.rodada] = null;
         update(ref(db), mudancas).catch((err) => alert('Erro ao apagar: ' + err.message));
     };
+
+    // ---------- Avisos de vaga (notificações) ----------
+    const VAPID_PUBLIC_KEY = 'BMC1WhxMRV1F4Pb2ZBNUL7N8FYULmYUKkxcJreCAupPxpKaLmEfxsjIQweqRjr8kXFj4qHo0azN3ZuUSKQt65XM';
+    const suportaAvisos = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+    function chaveParaBytes(base64url) {
+        const preenchida = (base64url + '='.repeat((4 - (base64url.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+        const bruto = atob(preenchida);
+        return Uint8Array.from(bruto, (c) => c.charCodeAt(0));
+    }
+
+    async function inscricaoAtual() {
+        const reg = await navigator.serviceWorker.ready;
+        return reg.pushManager.getSubscription();
+    }
+
+    async function atualizarBotaoAvisos() {
+        const btn = $('btnAvisos');
+        if (!suportaAvisos) { btn.hidden = true; return; }
+        const sub = Notification.permission === 'granted' ? await inscricaoAtual() : null;
+        btn.hidden = false;
+        btn.textContent = sub ? '🔕 Desativar avisos de vaga' : '🔔 Ativar avisos de vaga';
+    }
+
+    // Se este aparelho já tem avisos ativos, garante que a inscrição está ligada ao usuário atual
+    let uidSincronizado = null;
+    async function sincronizarAvisos() {
+        if (!suportaAvisos || !user || uidSincronizado === user.uid) return;
+        uidSincronizado = user.uid;
+        try {
+            if (Notification.permission === 'granted') {
+                const sub = await inscricaoAtual();
+                if (sub) await set(ref(db, 'inscricoes/' + user.uid), sub.toJSON());
+            }
+        } catch (err) { /* sem problema: o botão permite tentar de novo */ }
+        atualizarBotaoAvisos();
+    }
+
+    async function alternarAvisos() {
+        if (!user) return;
+        const btn = $('btnAvisos');
+        btn.disabled = true;
+        try {
+            const sub = Notification.permission === 'granted' ? await inscricaoAtual() : null;
+            if (sub) {
+                await remove(ref(db, 'inscricoes/' + user.uid));
+                await sub.unsubscribe();
+            } else {
+                const permissao = await Notification.requestPermission();
+                if (permissao !== 'granted') {
+                    alert('Sem a permissão do navegador não dá para enviar avisos. Você pode liberar nas configurações do site ou do app.');
+                    return;
+                }
+                const reg = await navigator.serviceWorker.ready;
+                const nova = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: chaveParaBytes(VAPID_PUBLIC_KEY)
+                });
+                await set(ref(db, 'inscricoes/' + user.uid), nova.toJSON());
+            }
+        } catch (err) {
+            alert('Não foi possível alterar os avisos: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            atualizarBotaoAvisos();
+        }
+    }
+    $('btnAvisos').onclick = alternarAvisos;
+    atualizarBotaoAvisos();
+
+    // Depois de entrar/sair da lista, pede ao servidor para ver se alguém subiu da espera
+    async function avisarServidor() {
+        try {
+            if (!user) return;
+            const token = await user.getIdToken();
+            fetch('/api/notificar', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, keepalive: true })
+                .catch(() => {});
+        } catch (err) { /* o site funciona normalmente sem o aviso */ }
+    }
 </script>
 
 <script>

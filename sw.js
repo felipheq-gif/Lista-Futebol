@@ -3,14 +3,15 @@
 // e só usa o que está guardado quando a pessoa está sem internet.
 // Os dados da lista (Firebase) e os scripts externos NÃO passam por aqui.
 
-const VERSAO = 'v1';
+const VERSAO = 'v2';
 const CACHE = `lista-futebol-${VERSAO}`;
 const BASICO = [
     '/',
     '/manifest.json',
     '/icons/icon-192.png',
     '/icons/icon-512.png',
-    '/icons/apple-touch-icon.png'
+    '/icons/apple-touch-icon.png',
+    '/icons/badge-96.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -45,5 +46,36 @@ self.addEventListener('fetch', (event) => {
                 return resp;
             })
             .catch(() => caches.match(req).then((guardado) => guardado || caches.match('/')))
+    );
+});
+
+// ---------- Notificações (avisos de vaga) ----------
+self.addEventListener('push', (event) => {
+    let dados = {};
+    try {
+        dados = event.data ? event.data.json() : {};
+    } catch (e) {
+        dados = { corpo: event.data ? event.data.text() : '' };
+    }
+    event.waitUntil(
+        self.registration.showNotification(dados.titulo || 'Lista do Futebol', {
+            body: dados.corpo || '',
+            icon: '/icons/icon-192.png',
+            badge: '/icons/badge-96.png',
+            data: { url: dados.url || '/' }
+        })
+    );
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const alvo = (event.notification.data && event.notification.data.url) || '/';
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((janelas) => {
+            for (const janela of janelas) {
+                if ('focus' in janela) return janela.focus();
+            }
+            return clients.openWindow(alvo);
+        })
     );
 });
