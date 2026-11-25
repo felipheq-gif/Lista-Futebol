@@ -374,6 +374,27 @@
         return { mudancas };
     }
 
+    // Troca o nome também nos times do dia e no histórico daquela rodada, para o time
+    // e a regra de não repetir duplas passarem a seguir o jogador certo.
+    function renomearNosTimes(t, hist, antigo, novo) {
+        const mudancas = {};
+        const aplicar = (equipes, base) => {
+            Object.entries(equipes || {}).forEach(([id, lista]) => {
+                const nomes = Object.values(lista || {});
+                if (!nomes.includes(antigo)) return;
+                mudancas[base + id] = nomes
+                    .map((n) => (n === antigo ? novo : n))
+                    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            });
+        };
+        if (t && t.rodada) {
+            aplicar(t.equipes, 'pelada/times/equipes/');
+            const h = hist && hist[t.rodada];
+            if (h) aplicar(h.equipes, 'pelada/historico/' + t.rodada + '/equipes/');
+        }
+        return mudancas;
+    }
+
     function editarJogador(j) {
         if (!isAdmin()) return;
         const resposta = prompt(`Novo nome para "${j.nome}":`, j.nome);
@@ -381,6 +402,8 @@
         const r = prepararEdicao(jogadores, j, resposta);
         if (r.erro) { alert(r.erro); return; }
         if (r.nada) return;
+        const novoNome = r.mudancas['pelada/jogadores/' + chaveDoNome(resposta)].nome;
+        Object.assign(r.mudancas, renomearNosTimes(times, historico, j.nome, novoNome));
         update(ref(db), r.mudancas)
             .catch(() => alert('Não foi possível salvar a alteração. Confira se as regras do Firebase foram atualizadas.'));
     }
