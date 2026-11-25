@@ -70,6 +70,7 @@
         .list-falta li { background: #fee2e2; color: #991b1b; }
         .btn-remover { background: none; color: #64748b; padding: 4px 8px; font-size: 13px; border: none; cursor: pointer; border-radius: 4px; flex-shrink: 0; }
         .btn-remover:hover { background: #e2e8f0; color: var(--text); }
+        .acoes { display: flex; gap: 4px; flex-shrink: 0; }
         .empty { color: #94a3b8; font-style: italic; text-align: center; padding: 12px; font-size: 14px; }
 
         #btnSortear { background: #7c3aed; }
@@ -116,7 +117,7 @@
 
     <h1>⚽ Lista do Futebol</h1>
     <div class="subtitle">Digite seu nome e escolha sua situação</div>
-    <button class="btn-avisos" id="btnAvisos" type="button" hidden>🔔 Ativar notificação </button>
+    <button class="btn-avisos" id="btnAvisos" type="button" hidden>🔔 Avisar quando abrir uma vaga para mim</button>
 
     <div class="vagas-contador" id="contador">0 / 20 Vagas Ocupadas</div>
 
@@ -190,6 +191,7 @@
     let historico = {};       // sorteios anteriores, usados para evitar repetir os mesmos times
     let offsetRelogio = 0;    // diferença entre o relógio do celular e o do servidor
     let aberturaAuto = null;  // dia (AAAA-MM-DD) em que a abertura automática já aconteceu
+    let limpezaAuto = null;   // segunda-feira (AAAA-MM-DD) do último ciclo de limpeza automática
 
     const $ = (id) => document.getElementById(id);
     const isAdmin = () => !!user && !user.isAnonymous;
@@ -235,8 +237,10 @@
         times = d.times || null;
         historico = d.historico || {};
         aberturaAuto = d.aberturaAuto || null;
+        limpezaAuto = d.limpezaAuto || null;
         carregou = true;
         atualizarTela();
+        verificarLimpezaAutomatica();
         verificarAberturaAutomatica();
         verificarSorteioAutomatico();
     }, (err) => alert("Erro ao ler a lista: " + err.message));
@@ -245,18 +249,26 @@
     onValue(ref(db, '.info/serverTimeOffset'), (s) => { offsetRelogio = s.val() || 0; });
 
     // ---------- Tela ----------
+    function criarBotao(texto, aoClicar) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-remover';
+        btn.textContent = texto;
+        btn.onclick = aoClicar;
+        return btn;
+    }
+
     function criarItem(texto, jogador) {
         const li = document.createElement('li');
         const span = document.createElement('span');
         span.textContent = texto; // textContent evita injeção de HTML pelos nomes
         li.appendChild(span);
         if (user && (isAdmin() || jogador.dono === user.uid)) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn-remover';
-            btn.textContent = 'Apagar';
-            btn.onclick = () => removerJogador(jogador);
-            li.appendChild(btn);
+            const acoes = document.createElement('div');
+            acoes.className = 'acoes';
+            if (isAdmin()) acoes.appendChild(criarBotao('Editar', () => editarJogador(jogador)));
+            acoes.appendChild(criarBotao('Apagar', () => removerJogador(jogador)));
+            li.appendChild(acoes);
         }
         return li;
     }
@@ -345,6 +357,32 @@
         remove(ref(db, 'pelada/jogadores/' + j.id))
             .then(avisarServidor)
             .catch((err) => alert('Erro ao remover: ' + err.message));
+    }
+
+    // Decide o que gravar ao editar o nome. A posição na fila (criadoEm), o status e o dono
+    // do registro são mantidos; só o nome (e a chave que o identifica) muda.
+    function prepararEdicao(lista, j, resposta) {
+        const nome = (resposta || '').trim().replace(/\s+/g, ' ');
+        const chave = chaveDoNome(nome);
+        if (nome === '' || chave === '') return { erro: 'Digite um nome com pelo menos uma letra ou número.' };
+        if (nome.length > 25) return { erro: 'O nome pode ter no máximo 25 caracteres.' };
+        if (nome === j.nome) return { nada: true };
+        if (chave !== j.id && lista.some((x) => x.id === chave)) return { erro: 'Já existe alguém com esse nome na lista.' };
+        const mudancas = {};
+        if (chave !== j.id) mudancas['pelada/jogadores/' + j.id] = null;
+        mudancas['pelada/jogadores/' + chave] = { nome, status: j.status, criadoEm: j.criadoEm, dono: j.dono };
+        return { mudancas };
+    }
+
+    function editarJogador(j) {
+        if (!isAdmin()) return;
+        const resposta = prompt(`Novo nome para "${j.nome}":`, j.nome);
+        if (resposta === null) return;
+        const r = prepararEdicao(jogadores, j, resposta);
+        if (r.erro) { alert(r.erro); return; }
+        if (r.nada) return;
+        update(ref(db), r.mudancas)
+            .catch(() => alert('Não foi possível salvar a alteração. Confira se as regras do Firebase foram atualizadas.'));
     }
 
     $('btnConfirmar').onclick = () => adicionarJogador('confirmado');
@@ -513,6 +551,30 @@
         ultimaTentativaAuto = dia;
         sortearTimes(false);
     }
+    // Limpeza semanal: de segunda 8h até terça 11h59, o primeiro celular com o site aberto
+    // pede ao servidor para limpar a lista. QUEM DECIDE é o servidor (api/limpar.js), que confere
+    // dia, hora e se já limpou. O histórico de sorteios nunca é apagado.
+    let ultimaTentativaLimpeza = null;
+    function cicloDaLimpeza() {
+        const { dia, semana, minutos } = partesSP(agora());
+        if (semana === 'Mon' && minutos >= 8 * 60) return dia;
+        if (semana === 'Tue' && minutos < 12 * 60) {
+            const [a, m, d] = dia.split('-').map(Number);
+            return new Date(Date.UTC(a, m - 1, d - 1)).toISOString().slice(0, 10); // a segunda de ontem
+        }
+        return null;
+    }
+    async function verificarLimpezaAutomatica() {
+        if (!user || !carregou) return;
+        const ciclo = cicloDaLimpeza();
+        if (!ciclo || limpezaAuto === ciclo || ultimaTentativaLimpeza === ciclo) return;
+        ultimaTentativaLimpeza = ciclo;
+        try {
+            const token = await user.getIdToken();
+            await fetch('/api/limpar', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+        } catch (err) { /* sem problema: o botão manual do admin continua funcionando */ }
+    }
+
     // Na terça, a partir das 12h, o primeiro celular com o site aberto abre a lista.
     // O dia fica registrado: se o admin trancar depois, a lista NÃO reabre sozinha naquele dia.
     const HORA_ABERTURA = 12 * 60; // 12h, em minutos
@@ -529,6 +591,7 @@
     }
 
     setInterval(() => {
+        verificarLimpezaAutomatica();
         verificarAberturaAutomatica();
         verificarSorteioAutomatico();
     }, 15000);
